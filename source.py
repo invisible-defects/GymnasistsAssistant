@@ -40,10 +40,9 @@ classes = {'5а' : 'C', '5б' : 'D', '5в' : 'E', '5г' : 'F', '5д' : 'G', '6а
 
 days = {0 : 'Понедельник: \n', 1 : 'Вторник: \n', 2 : 'Среда: \n', 3 : 'Четверг: \n', 4 : 'Пятница: \n'}
 
-distr = {}
+dist = {}
 
-
-# In[6]:
+ent = '\n'
 
 # Кнопки меню (b = button, ch = char)
 
@@ -103,9 +102,6 @@ m_reg.row(b_parent)
 # Очистка клавиатуры
 m_hide = types.ReplyKeyboardRemove()
 
-
-# In[10]:
-
 # Регистрация
 
 # Учителя
@@ -114,6 +110,7 @@ def teacher_reg(message):
         conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
         cur = conn.cursor()
         cur.execute("INSERT INTO main(chatid, status) VALUES ("+str(message.chat.id)+", 2);")
+        conn.commit()
         cur.close()
         conn.close()
         bot.send_message(message.chat.id, "Добро пожаловать в режим учителя!", reply_markup = m_teacher)
@@ -133,6 +130,7 @@ def kid_reg(message):
             cur = conn.cursor()
             cur.execute("INSERT INTO main(chatid, status, class) VALUES ("+str(message.chat.id)+", 1, '"+
                         clas+"');")
+            conn.commit()
             cur.close()
             conn.close()
             bot.send_message(message.chat.id, "Спасибо за регистрацию! Добро пожаловать!", reply_markup = m_kid)
@@ -152,14 +150,20 @@ def hello(message):
     bot.register_next_step_handler(message, registration)
 
 def registration(message):
-    if message.text == parent:
+    if 'Родитель' in message.text:
         bot.send_message(message.chat.id, "Приветствуем Вас в режиме родителя!", reply_markup = m_parent)
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("INSERT INTO main(chatid, status) VALUES ("+str(message.chat.id)+", 3);")
+        conn.commit()
+        cur.close()
+        conn.close()
         
-    elif message.text == teacher:
+    elif 'Учитель' in message.text:
         bot.send_message(message.chat.id, "Введите пароль учителя!", reply_markup = m_hide)
         bot.register_next_step_handler(message, teacher_reg)
         
-    elif message.text == kid:
+    elif 'Гимназист' in message.text:
         bot.send_message(message.chat.id, "Введите Ваш класс!", reply_markup = m_hide)
         bot.register_next_step_handler(message, kid_reg)
         
@@ -168,28 +172,18 @@ def registration(message):
                          m_reg)
         bot.register_next_step_handler(message, registration)
 
-
-# In[ ]:
-
 # Проверка авторизации
 
 def check_reg(chatid):
     conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
     cur = conn.cursor()
-    cur.execute("SELECT status FROM main WHERE ChatID=" + str(chatid) + ";")
-    out = ""
+    cur.execute("SELECT status FROM main WHERE chatid=" + str(chatid) + ";")
+    out = 0
     for row in cur:
-        out += str(row)
+        out += row[0]
     cur.close()
     conn.close()
-    if out == '':
-        return 0
-    else:
-        return int(out)
-    
-
-
-# In[1]:
+    return out
 
 # Основной код (c = code)
 
@@ -198,7 +192,7 @@ def c_news(message):
     out = 'Последние новости гимназии:'
     out += ent + ent
     d = feedparser.parse('http://gsg.mskobr.ru/data/rss/77/')
-    for a in range (2):
+    for a in range (3):
         title = (d['entries'][a]['title'])
         link = (d['entries'][a]['link'])
         out += str(a+1) + '. ' + title + ent + link + ent
@@ -206,11 +200,20 @@ def c_news(message):
     
 # "Подробнее" в расписании
 def c_more(message):
-    out = ''
-    if message.text == '\n Подробнее ' + chr(0x1F50E):
-        for day in range(4):
-            out += days[day]
-            for lesson in range (6):
+    if 'Подробнее' in message.text:
+        out = ''
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("SELECT class FROM main WHERE ChatID=" + str(message.chat.id) + ";")
+        for row in cur:
+            out += row[0]
+        cur.close()
+        conn.close()
+        charty = classes[out]
+        out = ''
+        for day in range(5):
+            out += days[day] + '\n'
+            for lesson in range (7):
                 chartx = 1 + day * 8 + lesson+1
                 chartx = str(chartx)
                 tabl = charty + chartx
@@ -218,6 +221,7 @@ def c_more(message):
                     out += '- \n'
                 else:
                     out += sheet_ranges[tabl].value + '\n'
+            out += '\n'
         bot.send_message(message.chat.id, out, reply_markup = m_kid)
     else:
         bot.send_message(message.chat.id, 'Выберите категорию!', reply_markup = m_kid)
@@ -226,10 +230,10 @@ def c_more(message):
 def c_tt(message):
     conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
     cur = conn.cursor()
-    cur.execute("SELECT class FROM main WHERE ChatID=" + str(chatid) + ";")
+    cur.execute("SELECT class FROM main WHERE ChatID=" + str(message.chat.id) + ";")
     out = ""
     for row in cur:
-        out += str(row)
+        out += row[0]
     cur.close()
     conn.close()
     charty = classes[out]
@@ -262,7 +266,7 @@ def c_tt(message):
     tabl = charty + chartx
     out = sheet_ranges[tabl].value
     if not (dday == 6 or dday == 5 or les == 0):
-        bot.send_message(message.chat.id, 'Ваш следующий урок: \n' + out, reply_markup=markup10)
+        bot.send_message(message.chat.id, 'Ваш следующий урок: \n' + out, reply_markup=m_more)
         bot.register_next_step_handler(message, c_more)
     else:
         bot.send_message(message.chat.id, "У вас больше нет сегодня уроков!", reply_markup=m_more)
@@ -275,15 +279,19 @@ def c_links(message):
 
 # Добавление потерянной вещи
 def c_lost(message):
-    conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
-    cur = conn.cursor()
-    cur.execute("INSERT INTO lost(item) VALUES ('"+message.text+"');")
-    cur.close()
-    conn.close()
-    bot.send_message(message.chat.id, 'Объявление успешно добавлено!', reply_markup = m_teacher)
+    if (message.text).lower() == 'выход':
+        bot.send_message(message.chat.id, 'Выберите категорию!', reply_markup = m_teacher)
+    else:
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("INSERT INTO lost(item) VALUES ('"+message.text+"');")
+        conn.commit()
+        cur.close()
+        conn.close()
+        bot.send_message(message.chat.id, 'Объявление успешно добавлено!', reply_markup = m_teacher)
     
 # Объявления, ч.2 (версия для учителей)
-def c_ads2(message):
+def c_ads2_t(message):
     if message.text == 'Мероприятия' + chr(0x23F0):
         sheet_ranges = wb['2']
         k = 1
@@ -304,19 +312,7 @@ def c_ads2(message):
             out += merop + ent + ent
             k = k + 1
         sheet_ranges = wb['1']
-        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
-        cur = conn.cursor()
-        cur.execute("SELECT status FROM main WHERE ChatID=" + str(chatid) + ";")
-        out = ""
-        for row in cur:
-            out += str(row)
-        cur.close()
-        conn.close()
-        
-        if out == 1:
-            bot.send_message(message.chat.id, out, reply_markup = m_kid)
-        else:
-            bot.send_message(message.chat.id, out, reply_markup = m_teacher)
+        bot.send_message(message.chat.id, out, reply_markup = m_teacher)
     else:
         bot.send_message(message.chat.id, 'Здесь вы можете разместить объявление о нахождении чьей-то потерянной вещи. \n Чтобы продолжить, введите всю информацию о потерянной вещи в следующем сообщении. \n Чтобы выйти, отправьте "Выход".', reply_markup = m_hide)
         bot.register_next_step_handler(message, c_lost)
@@ -345,17 +341,16 @@ def c_ads2(message):
         sheet_ranges = wb['1']
         conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
         cur = conn.cursor()
-        cur.execute("SELECT status FROM main WHERE ChatID=" + str(chatid) + ";")
-        out = ""
+        cur.execute("SELECT status FROM main WHERE ChatID=" + str(message.chat.id) + ";")
+        clas = 0
         for row in cur:
-            out += str(row)
+            clas += row[0]
         cur.close()
         conn.close()
-        
-        if out == 1:
+        if clas == 1:
             bot.send_message(message.chat.id, out, reply_markup = m_kid)
         else:
-            bot.send_message(message.chat.id, out, reply_markup = m_teacher)
+            bot.send_message(message.chat.id, out, reply_markup = m_parent)
     else:
         conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
         cur = conn.cursor()
@@ -363,12 +358,12 @@ def c_ads2(message):
         out = ""
         cnt = 1
         for row in cur:
-            out += str(cnt) + '. ' + str(row) + '\n'
+            out += str(cnt) + '. ' + row[0] + '\n'
             cnt += 1
-        cur.execute("SELECT status FROM main WHERE ChatID=" + str(chatid) + ";")
-        clas = ""
+        cur.execute("SELECT status FROM main WHERE ChatID=" + str(message.chat.id) + ";")
+        clas = 0
         for row in cur:
-            clas += str(row)
+            clas += row[0]
         cur.close()
         conn.close()
         
@@ -379,9 +374,9 @@ def c_ads2(message):
                 bot.send_message(message.chat.id, out, reply_markup = m_kid)
         else:
             if out == '':
-                bot.send_message(message.chat.id, 'Информации о потерянных вещах пока нет!', reply_markup = m_teacher)
+                bot.send_message(message.chat.id, 'Информации о потерянных вещах пока нет!', reply_markup = m_parent)
             else:
-                bot.send_message(message.chat.id, out, reply_markup = m_teacher)
+                bot.send_message(message.chat.id, out, reply_markup = m_parent)
 
 # Объявления
 def c_ads(message):
@@ -403,15 +398,22 @@ def c_dist3(message):
     conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
     cur = conn.cursor()
     for adress in dist[message.chat.id]:
-        cur.execute("SELECT chatid FROM main WHERE status="+adress+" OR class="+adress+";")
-        for row in cur:
-            bot.send_message(row[0], message.text)
+        if len(adress) == 1:
+            cur.execute("SELECT chatid FROM main WHERE status="+adress+" ;")
+            for row in cur:
+                if not row[0] == message.chat.id:
+                    bot.send_message(row[0], message.text)
+        else:
+            cur.execute("SELECT chatid FROM main WHERE class='"+adress+"' ;")
+            for row in cur:
+                bot.send_message(row[0], message.text)
     cur.close()
     conn.close()
     bot.send_message(message.chat.id, 'Сообщение успешно разослано!', reply_markup = m_teacher)
 
 # Рассылки ч.2
 def c_dist2(message):
+    go = True
     text = (message.text).lower()
     text = text.split(',')
     adresses = set()
@@ -421,15 +423,19 @@ def c_dist2(message):
             adresses.add('2')
         elif adress == 'ученики':
             adresses.add('1')
+        elif adress == 'родители':
+            adresses.add('3')
         elif adress in classes and (not 1 in adresses):
             adresses.add(adress)
         else:
             bot.send_message(message.chat.id, 'Адресат ' + adress + ' не найден! \n Попробуйте ввести адресатов еще раз.')
             bot.register_next_step_handler(message, c_dist2)
+            go = False
             break
-    distr[message.chat.id] = adresses
-    bot.send_message(message.chat.id, 'Теперь введите рассылаемое сообщение.')
-    bot.register_next_step_handler(message, c_dist3)
+    if go:
+        dist[message.chat.id] = adresses
+        bot.send_message(message.chat.id, 'Теперь введите рассылаемое сообщение.')
+        bot.register_next_step_handler(message, c_dist3)
             
 # Рассылки
 def c_dist(message):
@@ -450,9 +456,7 @@ def c_kid(message):
         c_ads(message)
     elif 'Поддержка' in message.text:
         c_cont(message)
-    else:
-        bot.send_message(message.chat.id, "Команда не опознанна!", reply_markup = m_kid)
-        
+
 # Интерфейс учителя
 def c_teacher(message):
     if 'Рассылка' in message.text:
@@ -465,8 +469,6 @@ def c_teacher(message):
         c_ads_t(message)
     elif 'Поддержка' in message.text:
         c_cont(message)
-    else:
-        bot.send_message(message.chat.id, "Команда не опознанна!", reply_markup = m_teacher)
         
 # Интерфейс родителя
 def c_parent(message):
@@ -476,18 +478,13 @@ def c_parent(message):
         c_ads(message)
     elif 'Поддержка' in message.text:
         c_cont(message)
-    else:
-        bot.send_message(message.chat.id, "Команда не опознанна!", reply_markup = m_parent)
 
 # Хендлер сообщений
 
 @bot.message_handler(func=lambda message: (message.content_type == 'text'))
 def all_messages(message):
-    if message.text == '/start':
+    if message.text == '/start' and check_reg(message.chat.id) == 0:
         hello(message)
-    elif check_reg(message.chat.id) == 0:
-        bot.send_message(message.chat.id, "Чтобы продолжить, зарегестрируйтесь.", reply_markup = m_reg)
-        bot.register_next_step_handler(message, registration)
     elif check_reg(message.chat.id) == 1:
         bot.register_next_step_handler(message, c_kid)
     elif check_reg(message.chat.id) == 2:
