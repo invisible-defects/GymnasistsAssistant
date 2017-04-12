@@ -1,6 +1,6 @@
 # GymnasistsAssistant2
-v2.0 of Gymnasist's Assistant Telegram Chat-Bot
-MySQL Settings:
+v2.0 of Gymnasist's Assistant Telegram Chat-Bot  
+MySQL Settings:  
 ```
 CREATE USER 'bot'@'localhost' IDENTIFIED BY 'password';
 CREATE DATABASE main;
