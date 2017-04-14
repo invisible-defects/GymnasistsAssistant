@@ -12,6 +12,9 @@ import feedparser
 from openpyxl import load_workbook
 import pymysql
 from telebot import types
+import sys
+from threading import Timer
+import random
 
 # Иниализация бота и импорт учительского пароля
 
@@ -47,6 +50,15 @@ dist = {}
 
 ent = '\n'
 
+
+#Словарь пользователей
+users = {}
+
+# Список пожеланий хорошего дня
+nice_day = ['Хорошего Вам дня!', 'Хорошо провести день!', 'Удачного дня!', 'Хорошего настроения!',
+            'Удачи во всех начинаниях!', 'Великих свершений!', 'Позитивных эмоций!', 'Позитивного настроя!']
+
+
 # Кнопки меню (b = button, ch = char)
 
 b_tt = types.KeyboardButton('Следующий Урок ' + chr(0x1F552))
@@ -65,8 +77,8 @@ b_more = types.KeyboardButton('Подробнее ' + chr(0x1F50E))
 b_menu = types.KeyboardButton('Меню ' + chr(0x1F4CB))
 b_register = types.KeyboardButton('Дневник ' + chr(0x1F4D6))
 b_bells = types.KeyboardButton('Расписание Звонков ' + chr(0x1F552))
-
-# In[9]:
+b_add = types.KeyboardButton('Добавить ' + chr(0x1F527))
+b_watch = types.KeyboardButton('Посмотреть ' + chr(0x1F62F))
 
 # Пользовательские клавиатуры (m = markup)
 
@@ -103,6 +115,18 @@ m_reg = types.ReplyKeyboardMarkup()
 m_reg.row(b_kid)
 m_reg.row(b_teacher)
 m_reg.row(b_parent)
+
+# Дополнительное меню потерянных вещей
+m_choose = types.ReplyKeyboardMarkup()
+m_choose.row(b_add, b_watch)
+
+# Выбор источника новостей
+m_news = types.ReplyKeyboardMarkup()
+m_news.row('Новости Гимназии')
+m_news.row('Новости Департамента Образования')
+m_news.row('Популярная Механика')
+m_news.row('Хабрахабр')
+m_news.row('Яндекс.Наука')
 
 # Очистка клавиатуры
 m_hide = types.ReplyKeyboardRemove()
@@ -190,6 +214,7 @@ def check_reg(chatid):
         out += row[0]
     cur.close()
     conn.close()
+    users[chatid] = out
     return out
 
 
@@ -205,39 +230,43 @@ def c_parse(login, password):
     auth_req = session.get(auth_url, headers=headers, params={"login": login,
                                                               "password": pas},
                            allow_redirects=False)
-    main_req = session.get("https://mrko.mos.ru/dnevnik/services/dnevnik.php?r=1&first=1")
+    d1 = datetime.datetime.now()
+    d1 = datetime.datetime.date(d1)
+    d = datetime.datetime.weekday(d1)
+    if d == 5 or d == 6 or d == 4:
+        try:
+            d = datetime.date(d1.year, d1.month, d1.day + 7 - d)
+        except Exception:
+            d1 = datetime.date(d1.year, d1.month + 1, 1)
+            d = datetime.date(d1.year, d1.month + 1, 1 + 7 - datetime.datetime.weekday(d1))
+        main_req = session.get("https://mrko.mos.ru/dnevnik/services/dnevnik.php?r=1&first=1&next=" + str(d))
+    else:
+        main_req = session.get("https://mrko.mos.ru/dnevnik/services/dnevnik.php?r=1&first=1")
     parsed_html = BeautifulSoup(main_req.content, "lxml")
     columns = parsed_html.body.find_all('div', 'b-diary-week__column')
     final_ans = []
+    d = datetime.datetime.weekday(d)
+    d2 = d + 1
+    d = (days[d])[:-3]
+    d = d.upper()
+    d2 = days[d2][:-3]
+    d2 = d2.upper()
     for column in columns:
         date_number = column.find("span", "b-diary-date").text
         date_word = column.find("div", "b-diary-week-head__title").find_all("span")[0].text
-        d = datetime.datetime.now()
-        d = datetime.datetime.date(d)
-        d = datetime.datetime.weekday(d)
-        if d == 4:
-            d2 = 0
-        else:
-            d2 = d + 1
-        d = (days[d])[:-3]
-        d = d.upper()
-        d2 = days[d2][:-3]
-        d2 = d2.upper()
         if date_word == d or date_word == d2:
-            final_ans.append("<b>"+date_word+"</b> \n"+date_number+"\n \n")
+            final_ans.append("<b>" + date_word + "</b> \n" + date_number + "\n \n")
             lessons_table = column.find("div", "b-diary-lessons_table")
             all_lists = lessons_table.find_all("div", "b-dl-table__list")
             for lesson in all_lists:
                 lesson_columns = lesson.find_all("div", "b-dl-td_column")
                 lesson_number = lesson_columns[0].span.text
                 lesson_name = lesson_columns[1].span.text
-                # Если название урока пусто, пропускаем
                 if lesson_name == "":
                     pass
                 else:
                     lesson_dz = lesson_columns[2].find("div", "b-dl-td-hw-section").span.text
                     lesson_mark = lesson_columns[3].span.text[0:1]
-                    lesson_comment = lesson_columns[4].find("div", "b-dl-td-hw-comments").span.text
                     final_ans.append(
                         "<b>{0}. {1}</b>. Домашнее задание:\n"
                         "<i>{2}</i>\n"
@@ -260,7 +289,7 @@ def c_register2(message):
             out += lesson + '\n'
         if out == '':
             bot.send_message(message.chat.id, 'Возможно, дневник сейчас не работает.'
-                                            ' Попробуйте позже.', reply_markup=m_kid)
+                                              ' Попробуйте позже.', reply_markup=m_kid)
         else:
             bot.send_message(message.chat.id, out, reply_markup=m_kid, parse_mode='HTML')
     except Exception:
@@ -301,16 +330,41 @@ def c_bells(message):
                                       '15:30 - 16:15', parse_mode='Markdown')
 
 
-# Новости
+# Выбор новостей
+def c_select(message):
+    if 'Гимназии' in message.text:
+        c_news_parse(message, 'http://gsg.mskobr.ru/data/rss/77/')
+    elif 'Департамента' in message.text:
+        c_news_parse(message, 'http://dogm.mos.ru/rssexport/')
+    elif 'Хабр' in message.text:
+        c_news_parse(message, 'https://habrahabr.ru/rss/hubs/all/')
+    elif 'Популярная' in message.text:
+        c_news_parse(message, 'http://www.popmech.ru/out/public-all.xml')
+    elif '.Наука' in message.text:
+        c_news_parse(message, 'https://news.yandex.ru/science.rss')
+
+
+# Выбор Новостного канала
 def c_news(message):
-    out = 'Последние новости гимназии:'
-    out += ent + ent
-    d = feedparser.parse('http://gsg.mskobr.ru/data/rss/77/')
+    bot.send_message(message.chat.id, 'Выберите новостной канал!', reply_markup=m_news)
+    bot.register_next_step_handler(message, c_select)
+
+
+# Парсинг Новостей
+def c_news_parse(message, link):
+    out = ''
+    d = feedparser.parse(link)
     for a in range(3):
         title = (d['entries'][a]['title'])
         link = (d['entries'][a]['link'])
         out += str(a + 1) + '. ' + title + ent + link + ent
-    bot.send_message(message.chat.id, out)
+    if users[message.chat.id] == 1:
+        mkup = m_kid
+    elif users[message.chat.id] == 2:
+        mkup = m_teacher
+    if users[message.chat.id] == 3:
+        mkup = m_parent
+    bot.send_message(message.chat.id, out, reply_markup=mkup)
 
 
 # "Подробнее" в расписании
@@ -391,7 +445,10 @@ def c_tt(message):
 
 # Полезные ссылки
 def c_links(message):
-    out = '*Образовательные интернет-ресурсы* \n https://www.udacity.com/ \n https://www.coursera.org/ \n https://www.edx.org/ \n welcome.stepik.org/ru \n https://foxford.ru/ \n \n *Олимпиады для школьников* \n https://reg.olimpiada.ru/ \n https://abitu.net/ \n https://it-edu.mipt.ru/ \n \n *Официальный сайт Гимназии* \n gsg.mskobr.ru/'
+    out = '*Образовательные интернет-ресурсы* \n https://www.udacity.com/ \n' \
+          ' https://www.coursera.org/ \n https://www.edx.org/ \n welcome.stepik.org/ru \n ' \
+          'https://foxford.ru/ \n \n *Олимпиады для школьников* \n https://reg.olimpiada.ru/ \n' \
+          ' https://abitu.net/ \n https://it-edu.mipt.ru/ \n \n *Официальный сайт Гимназии* \n gsg.mskobr.ru/'
     bot.send_message(message.chat.id, out, parse_mode="Markdown")
 
 
@@ -409,34 +466,92 @@ def c_lost(message):
         bot.send_message(message.chat.id, 'Объявление успешно добавлено!', reply_markup=m_teacher)
 
 
-# Объявления, ч.2 (версия для учителей)
-def c_ads2_t(message):
-    if message.text == 'Мероприятия' + chr(0x23F0):
-        sheet_ranges = wb['2']
-        k = 1
-        out = ''
-        while k <= 3:
-            out += str(k) + '. '
-            meropkor = 'A' + str(k + 2)
-            merop = sheet_ranges[meropkor].value
-            merop = str(merop)
-            out += merop + ', '
-            meropkor = 'B' + str(k + 2)
-            merop = sheet_ranges[meropkor].value
-            merop = str(merop)
-            out += merop + ' ' + ent
-            meropkor = 'C' + str(k + 2)
-            merop = sheet_ranges[meropkor].value
-            merop = str(merop)
-            out += merop + ent + ent
-            k += 1
-        sheet_ranges = wb['1']
-        bot.send_message(message.chat.id, out, reply_markup=m_teacher)
+# Потерянные вещи, окно выбора
+def c_lost0(message):
+    if 'Посмотреть' in message.text:
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("SELECT item FROM lost;")
+        out = ""
+        cnt = 1
+        for row in cur:
+            out += str(cnt) + '. ' + row[0] + '\n'
+            cnt += 1
+        cur.close()
+        conn.close()
+        if out == '':
+            bot.send_message(message.chat.id, 'Информации о потерянных вещах пока нет!', reply_markup=m_teacher)
+        else:
+            bot.send_message(message.chat.id, out, reply_markup=m_teacher)
     else:
         bot.send_message(message.chat.id,
-                         'Здесь вы можете разместить объявление о нахождении чьей-то потерянной вещи. \n Чтобы продолжить, введите всю информацию о потерянной вещи в следующем сообщении. \n Чтобы выйти, отправьте "Выход".',
+                         'Введите информацию о потерянной вещи: описание вещи, дату нахождения и'
+                         ' местонахождение вещи в данный момент.',
                          reply_markup=m_hide)
         bot.register_next_step_handler(message, c_lost)
+
+
+# Мероприятия, ввод
+def c_event1(message):
+    try:
+        text = message.text.split('\n')
+        name = text[0]
+        date = text[1]
+        descr = text[2]
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("INSERT INTO events(name, date, descr) VALUES ('" + name + "', '" + date + "', '" + descr + "');")
+        conn.commit()
+        cur.close()
+        conn.close()
+        bot.send_message(message.chat.id, 'Мероприятие успешно добавлено!', reply_markup=m_teacher)
+    except Exception:
+        e = sys.exc_info()[1]
+        print(e.args[0])
+        if len(message.text.split('\n')) > 3:
+            bot.send_message(message.chat.id, 'Неправильный формат ввода, не используйте'
+                                              ' начатие с новой строки.', reply_markup=m_teacher)
+        else:
+            bot.send_message(message.chat.id, 'Неправильный формат ввода! Попробуйте еще раз.', reply_markup=m_teacher)
+
+
+# Мероприятия, окно выбора
+def c_event0(message):
+    if 'Посмотреть' in message.text:
+        conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main', charset='utf8mb4')
+        cur = conn.cursor()
+        cur.execute("SELECT date, name, descr FROM events;")
+        out = ""
+        cnt = 1
+        for row in cur:
+            out += str(cnt) + '. ' + row[1] + ' - ' + str(row[0]) + '\n' + row[2] + '\n'
+            cnt += 1
+        cur.close()
+        conn.close()
+        if out == '':
+            bot.send_message(message.chat.id, 'Пока мероприятий не запланировано!', reply_markup=m_teacher)
+        else:
+            bot.send_message(message.chat.id, out, reply_markup=m_teacher)
+    else:
+        bot.send_message(message.chat.id, 'Введите информацию о мероприятии в формате: \n'
+                                          '_Название \n'
+                                          'гггг-мм-дд \n'
+                                          'Описание_', reply_markup=m_hide, parse_mode='Markdown')
+        bot.register_next_step_handler(message, c_event1)
+
+
+# Объявления, ч.2 (версия для учителей)
+def c_ads2_t(message):
+    if 'Мероприятия' in message.text:
+        bot.send_message(message.chat.id,
+                         'Выберите действие!',
+                         reply_markup=m_choose)
+        bot.register_next_step_handler(message, c_event0)
+    else:
+        bot.send_message(message.chat.id,
+                         'Выберите действие!',
+                         reply_markup=m_choose)
+        bot.register_next_step_handler(message, c_lost0)
 
 
 # Объявления, ч.2
@@ -515,8 +630,8 @@ def c_ads_t(message):
 
 # Контакты
 def c_cont(message):
-    out = 'Если вам есть, что сказать автору, Вы можете связаться со мной по этому никнейму в Telegram: \n @diveintodarkness \n Спасибо, что пользуетесь Помошником Гимназиста! ' + chr(
-        0x2764)
+    out = 'Если вам есть, что сказать автору, Вы можете связаться со мной по этому никнейму в Telegram: \n ' \
+          '@diveintodarkness \n Спасибо, что пользуетесь Помощником Гимназиста! ' + chr(0x2764)
     bot.send_message(message.chat.id, out)
 
 
@@ -570,7 +685,8 @@ def c_dist2(message):
 # Рассылки
 def c_dist(message):
     bot.send_message(message.chat.id,
-                     'Через запятую введите получателей сообщения. \n Возможные получатели: \n Учителя, родители, ученики, конкретный класс (10.1, 9б, 7в и т.д.)',
+                     'Через запятую введите получателей сообщения. \n Возможные получатели:'
+                     ' \n Учителя, родители, ученики, конкретный класс (10.1, 9б, 7в и т.д.)',
                      reply_markup=m_hide)
     bot.register_next_step_handler(message, c_dist2)
 
@@ -581,7 +697,7 @@ def c_dist(message):
 def c_kid(message):
     if 'Следующий Урок' in message.text:
         c_tt(message)
-    elif 'Новости' in message.text:
+    elif 'Новости ' + chr(0x1F4C5) in message.text:
         c_news(message)
     elif 'Полезные Ссылки' in message.text:
         c_links(message)
@@ -597,7 +713,7 @@ def c_kid(message):
 def c_teacher(message):
     if 'Рассылка' in message.text:
         c_dist(message)
-    elif 'Новости' in message.text:
+    elif 'Новости ' + chr(0x1F4C5) in message.text:
         c_news(message)
     elif 'Полезные Ссылки' in message.text:
         c_links(message)
@@ -607,11 +723,13 @@ def c_teacher(message):
         c_cont(message)
     elif 'Расписание' in message.text:
         c_bells(message)
+    elif 'ADMIN_EVENTS' in message.text:
+        checker()
 
 
 # Интерфейс родителя
 def c_parent(message):
-    if 'Новости' in message.text:
+    if 'Новости ' + chr(0x1F4C5) in message.text:
         c_news(message)
     elif 'Объявления' in message.text:
         c_ads(message)
@@ -621,18 +739,35 @@ def c_parent(message):
         c_bells(message)
 
 
-# Хендлер сообщений
+# Рассылка событий на сегодня
+def checker():
+    conn = pymysql.connect(host='localhost', port=3306, user='bot', passwd='password', db='main',
+                           charset='utf8mb4')
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM events WHERE date = CURRENT_DATE;")
+    out = '*Напоминаем, что сегодня проходят мероприятия:* \n'
+    for row in cur:
+        out += row[0] + '\n'
+    random.seed()
+    out += '\n' + random.choice(nice_day) + '\n _- Администрация Помощника Гимназиста_'
+    cur.execute("SELECT chatid FROM main;")
+    for row in cur:
+        bot.send_message(row[0], out, parse_mode='Markdown')
+    cur.close()
+    conn.close()
 
+
+# Хендлер сообщений
 @bot.message_handler(func=lambda message: (message.content_type == 'text'))
 def all_messages(message):
     if message.text == '/start' and check_reg(message.chat.id) == 0:
         hello(message)
     elif check_reg(message.chat.id) == 1:
-        bot.register_next_step_handler(message, c_kid)
+        c_kid(message)
     elif check_reg(message.chat.id) == 2:
-        bot.register_next_step_handler(message, c_teacher)
+        c_teacher(message)
     elif check_reg(message.chat.id) == 3:
-        bot.register_next_step_handler(message, c_parent)
+        c_parent(message)
 
 
 # Постоянный polling
