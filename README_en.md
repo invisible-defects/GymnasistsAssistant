@@ -10,6 +10,7 @@ pip install feedParser
 pip install openpyxl
 pip install pymySQL
 ```
+3. Install [MySQL Community Server](https://dev.mysql.com/downloads/mysql/) and after setting up the server complete the commands listed below
 ```sql
 CREATE USER 'bot'@'localhost' IDENTIFIED BY 'password';
 CREATE DATABASE main;
@@ -18,3 +19,5 @@ CREATE TABLE main(chatid INT unsigned NOT NULL, status TINYINT unsigned NULL, cl
 CREATE TABLE lost(item varchar(255) NOT NULL)ENGINE=InnoDB;
 CREATE TABLE events(name varchar(255) NOT NULL, date DATE NOT NULL, desc varchar(255) NOT NULL)ENGINE=InnoDB;
 ```
+4. Set up "config.py" file by changing "token" (insert your bot's HTTP token) and "teacher_pass" (password for entering teacher's mode) variables
+5. Run "source.py"!
