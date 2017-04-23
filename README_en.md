@@ -1,8 +1,8 @@
 # Gymnasists Assistant
 ## Telegram chat-bot for students of Moscow State Classical School
 ### Installation
-1. Install [Python 3.6][https://www.python.org/downloads/release/python-361/]  
-2. Install several packages using [pip][https://pip.pypa.io/en/stable/installing/]
+1. Install [Python 3.6](https://www.python.org/downloads/release/python-361/)  
+2. Install several packages using [pip](https://pip.pypa.io/en/stable/installing/)
 ```bash
 pip install bs4
 pip install pyTelegramBotAPI
