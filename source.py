@@ -240,12 +240,12 @@ def c_parse(login, password):
             d1 = datetime.date(d1.year, d1.month + 1, 1)
             d = datetime.date(d1.year, d1.month + 1, 1 + 7 - datetime.datetime.weekday(d1))
         main_req = session.get("https://mrko.mos.ru/dnevnik/services/dnevnik.php?r=1&first=1&next=" + str(d))
+        d = datetime.datetime.weekday(d)
     else:
         main_req = session.get("https://mrko.mos.ru/dnevnik/services/dnevnik.php?r=1&first=1")
     parsed_html = BeautifulSoup(main_req.content, "lxml")
     columns = parsed_html.body.find_all('div', 'b-diary-week__column')
     final_ans = []
-    d = datetime.datetime.weekday(d)
     d2 = d + 1
     d = (days[d])[:-3]
     d = d.upper()
