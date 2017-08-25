@@ -60,4 +60,5 @@ CREATE TABLE events(name varchar(255) NOT NULL, date DATE NOT NULL, desc varchar
 ### Спасибо, что пользуетесь Помощником Гимназиста!
 #### Telegram: @diveintodarkness
 #### Vk: [Александр Воронков](https://vk.com/pois0n) 
+#### [Презентация проекта](https://www.dropbox.com/s/2c2903usqco0998/gymnasists_assistant.pptx?dl=0)
 #### 2017
